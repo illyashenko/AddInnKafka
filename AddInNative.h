@@ -11,8 +11,6 @@
 #include <vector>
 #include <codecvt>
 #include "OneCExtension.h"
-#include "Utils.h"
-
 
 ///////////////////////////////////////////////////////////////////////////////
 // class CAddInNative
@@ -22,17 +20,15 @@ public:
 	enum Props
 	{
 		ePropHost = 0,
-		ePropPort,
-		ePropKey,
-		ePropValue,
-		ePropStr,
+		ePropTopic,
+		ePropMessage,
 		ePropLast      // Always last
 	};
 
 	enum Methods
 	{
-		eMethSet = 0,
-		eMethGet,
+		eMethSend = 0,
+		eMethRead,
 		eMethLast      // Always last
 	};
 
@@ -66,22 +62,18 @@ public:
 private:
 	long findName(const wchar_t* names[], const wchar_t* name, const uint32_t size) const;
 	bool wstring_to_variant(std::wstring& str, tVariant* val);
-	bool string_to_variant(STRING& str, tVariant* val);
-	bool variant_to_string(STRING& str, tVariant* val);
-	bool string_to_retVariant(STRING& str, tVariant* retValue);
+	bool string_to_variant(std::string& str, tVariant* val);
+	bool variant_to_string(std::string& str, tVariant* val);
+	bool string_to_retVariant(std::string& str, tVariant* retValue);
 	void addError(uint32_t wcode, const wchar_t* source, const wchar_t* descriptor, long code);
-	STRING narrow_string(std::wstring const& s, std::locale const& loc, char default_char = '?');
+	std::string narrow_string(std::wstring const& s, std::locale const& loc, char default_char = '?');
 	// Attributes
 	IAddInDefBase* m_iConnect;
 	IMemoryManager* m_iMemory;
-	// Redis
-	STRING m_uiHost;
-	int m_uiPort;
-
-	std::wstring m_uiKey;
-	std::wstring m_uiValue;
-
-	std::basic_string<char16_t> m_uiStr;
+	// Kafka
+	std::wstring m_uHost;
+	std::wstring m_uTopic;
+	std::wstring m_uMessage;
 
 	HANDLE  m_hTimer;
 	HANDLE  m_hTimerQueue;

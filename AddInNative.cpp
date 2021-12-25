@@ -5,17 +5,17 @@
 #define BASE_ERRNO 7
 
 static const wchar_t* g_PropNames[] = {
-	L"Host", L"Port", L"Key", L"Value", L"Str"
+	L"Host", L"Topic", L"Message"
 };
 static const wchar_t* g_MethodNames[] = {
-	L"Set", L"Get"
+	L"Send", L"Read"
 };
 
 static const wchar_t* g_PropNamesRu[] = {
-	L"Host", L"Port", L"Key", L"Value", L"Str"
+	L"Host", L"Topic", L"Message"
 };
 static const wchar_t* g_MethodNamesRu[] = {
-	L"Set", L"Get"
+	L"Send", L"Read"
 };
 
 static const wchar_t g_kClassNames[] = L"AddInNativeExt";
@@ -169,26 +169,14 @@ const WCHAR_T* CAddInNative::GetPropName(long lPropNum, long lPropAlias)
 bool CAddInNative::GetPropVal(const long lPropNum, tVariant* pvarPropVal)
 {
 	switch (lPropNum) {
-	case ePropPort:
-		TV_VT(pvarPropVal) = VTYPE_I4;
-		TV_I4(pvarPropVal) = m_uiPort;
-		break;
 	case ePropHost:
-		string_to_variant(m_uiHost, pvarPropVal);
+		wstring_to_variant(m_uHost, pvarPropVal);
 		break;
-	case ePropKey:
-		wstring_to_variant(m_uiKey, pvarPropVal);
+	case ePropTopic:
+		wstring_to_variant(m_uTopic, pvarPropVal);
 		break;
-	case ePropValue:
-		wstring_to_variant(m_uiValue, pvarPropVal);
-		break;
-	case ePropStr:
-		if (m_iMemory->AllocMemory((void**)&pvarPropVal->pwstrVal, (m_uiStr.length() + 1) * sizeof(WCHAR)))
-		{
-			memcpy(pvarPropVal->pwstrVal, m_uiStr.c_str(), m_uiStr.length() * sizeof(WCHAR));
-			TV_VT(pvarPropVal) = VTYPE_PWSTR;
-			pvarPropVal->wstrLen = m_uiStr.length();
-		}
+	case ePropMessage:
+		wstring_to_variant(m_uMessage, pvarPropVal);
 		break;
 	default:
 		return false;
@@ -203,27 +191,17 @@ bool CAddInNative::SetPropVal(const long lPropNum, tVariant* varPropVal)
 	case ePropHost:
 		if (TV_VT(varPropVal) != VTYPE_PWSTR)
 			return false;
-		variant_to_string(m_uiHost, varPropVal);
+		m_uHost = TV_WSTR(varPropVal);
 		break;
-	case ePropPort:
-		if (TV_VT(varPropVal) != VTYPE_I4)
-			return false;
-		m_uiPort = TV_I4(varPropVal);
-		break;
-	case ePropKey:
+	case ePropTopic:
 		if (TV_VT(varPropVal) != VTYPE_PWSTR)
 			return false;
-		m_uiKey = TV_WSTR(varPropVal);
+		m_uTopic = TV_WSTR(varPropVal);
 		break;
-	case ePropValue:
+	case ePropMessage:
 		if (TV_VT(varPropVal) != VTYPE_PWSTR)
 			return false;
-		m_uiValue = TV_WSTR(varPropVal);
-		break;
-	case ePropStr:
-		if (TV_VT(varPropVal) != VTYPE_PWSTR)
-			return false;
-		m_uiStr.assign((char16_t*)varPropVal->pwstrVal, varPropVal->wstrLen);
+		m_uMessage = TV_WSTR(varPropVal);
 		break;
 	default:
 		return false;
@@ -240,15 +218,11 @@ bool CAddInNative::IsPropReadable(const long lPropNum)
 bool CAddInNative::IsPropWritable(const long lPropNum)
 {
 	switch (lPropNum) {
-	case ePropPort:
-		return true;
 	case ePropHost:
 		return true;
-	case ePropKey:
+	case ePropTopic:
 		return true;
-	case ePropValue:
-		return true;
-	case ePropStr:
+	case ePropMessage:
 		return true;
 	default:
 		return true;
@@ -313,15 +287,13 @@ long CAddInNative::GetNParams(const long lMethodNum)
 {
 	switch (lMethodNum)
 	{
-	case eMethGet:
-		return 1;
-	case eMethSet:
+	case eMethSend:
+		return 0;
+	case eMethRead:
 		return 0;
 	default:
 		return 0;
 	}
-
-	return 0;
 }
 //---------------------------------------------------------------------------//
 bool CAddInNative::GetParamDefValue(const long lMethodNum, const long lParamNum,
@@ -331,51 +303,34 @@ bool CAddInNative::GetParamDefValue(const long lMethodNum, const long lParamNum,
 
 	switch (lMethodNum)
 	{
-	case eMethGet:
+	case eMethSend:
 		// There are no parameter values by default 
 		break;
-	case eMethSet:
+	case eMethRead:
 		break;
 	default:
 		return false;
 	}
-
-	return false;
+	return true;
 }
 //---------------------------------------------------------------------------//
 bool CAddInNative::HasRetVal(const long lMethodNum)
 {
 	switch (lMethodNum)
 	{
-	case eMethGet:
+	case eMethSend:
+		return true;
+	case eMethRead:
 		return true;
 	default:
 		return false;
 	}
-
-	return false;
 }
 //---------------------------------------------------------------------------//
 bool CAddInNative::CallAsProc(const long lMethodNum, tVariant* paParams, const long lSizeArray)
 {
 	switch (lMethodNum)
 	{
-	case eMethSet: {
-
-		const std::locale loc("Russian_Russia.1251");
-		RedisContext context(m_uiHost.c_str(), m_uiPort);
-
-		if (!context.ConnectOk())
-		{
-			return false;
-		}
-
-		auto str = narrow_string(m_uiValue, loc);
-		auto str_key = narrow_string(m_uiKey, loc);
-		context.ContextSet(str_key, str);
-
-		return true;
-	}
 	default:
 		return false;
 	}
@@ -385,21 +340,38 @@ bool CAddInNative::CallAsFunc(const long lMethodNum, tVariant* pvarRetValue, tVa
 {
 	switch (lMethodNum)
 	{
-	case eMethGet: {
-		tVariant& pPrparam = paParams[0];
-		std::wstring temper(pPrparam.pwstrVal);
-		STRING key(temper.begin(), temper.end());
+	case eMethSend: {
 
-		RedisContext context(m_uiHost.c_str(), m_uiPort);
+		std::string err;
+		int32_t partition = RdKafka::Topic::PARTITION_UA;
+		const std::locale loc("Russian_Russia.1251");
+		auto host_ = narrow_string(m_uHost, loc);
 
-		if (!context.ConnectOk())
+		RdKafka::Conf* conf = RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL);
+		conf->set("metadata.broker.list", host_, err);
+
+		RdKafka::Producer* producer = RdKafka::Producer::create(conf, err);
+
+		if (!producer)
 		{
-			STRING str("ERROR: NOT CONNECT REDIS");
-			return string_to_retVariant(str, pvarRetValue);
+			return string_to_retVariant(err, pvarRetValue) ? true : false;
 		}
 
-		STRING result = context.ContextGet(key);
-		return string_to_retVariant(result, pvarRetValue) ? true : false;
+		delete conf;
+
+		auto message_ = narrow_string(m_uMessage, loc);
+		auto topic_ = narrow_string(m_uTopic, loc);
+
+		RdKafka::ErrorCode answ = producer->produce(topic_, partition,
+			RdKafka::Producer::RK_MSG_COPY, const_cast<char*>(message_.c_str()), message_.size(), NULL, 0, 0, NULL);
+
+		std::string ansewer(RdKafka::err2str(answ));
+
+		producer->poll(0);
+		producer->flush(10000);
+		delete producer;
+		
+		return string_to_retVariant(ansewer, pvarRetValue) ? true : false;
 	}
 	default:
 		return false;
@@ -562,7 +534,7 @@ bool CAddInNative::wstring_to_variant(std::wstring& str, tVariant* val) {
 	return true;
 }
 
-bool CAddInNative::string_to_variant(STRING& str, tVariant* val)
+bool CAddInNative::string_to_variant(std::string& str, tVariant* val)
 {
 	WCHAR_T* wsPropValue = 0;
 
@@ -584,7 +556,7 @@ bool CAddInNative::string_to_variant(STRING& str, tVariant* val)
 	return false;
 }
 
-bool CAddInNative::variant_to_string(STRING& str, tVariant* val)
+bool CAddInNative::variant_to_string(std::string& str, tVariant* val)
 {
 	std::locale lok("rus");
 	std::wstring wstr = TV_WSTR(val);
@@ -594,7 +566,7 @@ bool CAddInNative::variant_to_string(STRING& str, tVariant* val)
 	return true;
 }
 
-bool CAddInNative::string_to_retVariant(STRING& str, tVariant* retValue)
+bool CAddInNative::string_to_retVariant(std::string& str, tVariant* retValue)
 {
 	bool result = false;
 
@@ -609,11 +581,11 @@ bool CAddInNative::string_to_retVariant(STRING& str, tVariant* retValue)
 	return result;
 }
 
-STRING CAddInNative::narrow_string(std::wstring const& s, std::locale const& loc, char default_char)
+std::string CAddInNative::narrow_string(std::wstring const& s, std::locale const& loc, char default_char)
 {
 	if (s.empty()) 
 	{
-		return STRING();
+		return std::string();
 	}
 
 	std::ctype<wchar_t> const& facet = std::use_facet<std::ctype<wchar_t> >(loc);
@@ -625,5 +597,5 @@ STRING CAddInNative::narrow_string(std::wstring const& s, std::locale const& loc
 
 	facet.narrow(first, last, default_char, &result[0]);
 
-	return STRING(result.begin(), result.end());
+	return std::string(result.begin(), result.end());
 }

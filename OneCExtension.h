@@ -1,22 +1,22 @@
 #ifndef REDISEXT_H
 #define REDISEXT_H
 
-#include<hiredis/hiredis.h>
 #include <iostream>
+#include <librdkafka/rdkafkacpp.h>
 
-#pragma comment(lib, "Ws2_32.lib")
-
-using STRING = std::string;
-
-class RedisContext
+class Kafka
 {
 public:
-	RedisContext(const char* host, int port);
-	STRING ContextGet(STRING key);
-	void ContextSet(STRING key, STRING value);
-	bool ConnectOk();
+	Kafka(std::string broker);
+	~Kafka();
+	std::string send(std::string topic, std::string message);
+	std::string read(std::string topic);
+	std::string error();
+	bool connect();
+
 private:
-	redisContext* context_;
+	RdKafka::Producer* producer;
+	std::string error_string_;
 };
 
 #endif

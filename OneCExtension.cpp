@@ -1,29 +1,37 @@
 #include "OneCExtension.h"
 
-RedisContext::RedisContext(const char* host, int port)
+Kafka::Kafka(std::string broker) : error_string_("")
 {
-	context_ = redisConnect(host, port);
+	RdKafka::Conf* conf = RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL);
+	conf->set("metadata.broker.list", broker.c_str(), this->error_string_);
+	this->producer = RdKafka::Producer::create(conf, this->error_string_);
 }
 
-STRING RedisContext::ContextGet(STRING key)
+Kafka::~Kafka()
 {
-	redisReply* reply;
-	STRING return_str;
-	reply = static_cast<redisReply*>(redisCommand(context_, "GET %s", key.c_str()));
-	return_str = (reply->str) ? reply->str : STRING("ERROR: NOT KEY");
-	freeReplyObject(reply);
-
-	return return_str;
 }
 
-void RedisContext::ContextSet(STRING key, STRING value)
+std::string Kafka::send(std::string topic, std::string message)
 {
-	redisReply* reply;
-	reply = static_cast<redisReply*>(redisCommand(context_, "SET %s %s", key.c_str(), value.c_str()));
-	freeReplyObject(reply);
+	RdKafka::ErrorCode response = producer->produce(topic, RdKafka::Topic::PARTITION_UA,
+		RdKafka::Producer::RK_MSG_COPY, (void*)(message.c_str()), message.length() + 1, NULL, 0, 0, NULL);
+	producer->flush(10);
+	std::string errs(RdKafka::err2str(response));
+
+	return errs;
 }
 
-bool RedisContext::ConnectOk()
+std::string Kafka::read(std::string topik)
 {
-	return (context_ == NULL || context_->err) ? false : true;
+	return std::string();
+}
+
+std::string Kafka::error()
+{
+	return this->error_string_;
+}
+
+bool Kafka::connect()
+{
+	return producer ? true : false;
 }
