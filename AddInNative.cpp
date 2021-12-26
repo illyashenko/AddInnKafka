@@ -341,35 +341,21 @@ bool CAddInNative::CallAsFunc(const long lMethodNum, tVariant* pvarRetValue, tVa
 	switch (lMethodNum)
 	{
 	case eMethSend: {
-
-		std::string err;
-		int32_t partition = RdKafka::Topic::PARTITION_UA;
 		const std::locale loc("Russian_Russia.1251");
 		auto host_ = narrow_string(m_uHost, loc);
 
-		RdKafka::Conf* conf = RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL);
-		conf->set("metadata.broker.list", host_, err);
 
-		RdKafka::Producer* producer = RdKafka::Producer::create(conf, err);
+		Kafka prod(host_);
 
-		if (!producer)
+		if (!prod.connect())
 		{
-			return string_to_retVariant(err, pvarRetValue) ? true : false;
-		}
 
-		delete conf;
+			return string_to_retVariant(prod.error(), pvarRetValue) ? true : false;
+		}
 
 		auto message_ = narrow_string(m_uMessage, loc);
 		auto topic_ = narrow_string(m_uTopic, loc);
-
-		RdKafka::ErrorCode answ = producer->produce(topic_, partition,
-			RdKafka::Producer::RK_MSG_COPY, const_cast<char*>(message_.c_str()), message_.size(), NULL, 0, 0, NULL);
-
-		std::string ansewer(RdKafka::err2str(answ));
-
-		producer->poll(0);
-		producer->flush(10000);
-		delete producer;
+		auto ansewer = prod.send(topic_, message_);
 		
 		return string_to_retVariant(ansewer, pvarRetValue) ? true : false;
 	}

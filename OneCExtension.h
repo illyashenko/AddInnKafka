@@ -16,6 +16,7 @@ public:
 
 private:
 	RdKafka::Producer* producer;
+	RdKafka::Conf* conf;
 	std::string error_string_;
 };
 
