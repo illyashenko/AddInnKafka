@@ -1,19 +1,19 @@
 #include "OneCExtension.h"
 
-Kafka::Kafka(std::string broker) : error_string_("")
+KafkaProducer::KafkaProducer(std::string broker) : error_string_("")
 {
 	this->conf = RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL);
-	conf->set("metadata.broker.list", broker.c_str(), this->error_string_);
-	this->producer = RdKafka::Producer::create(conf, this->error_string_);
+	this->conf->set("metadata.broker.list", broker.c_str(), this->error_string_);
+	this->producer = RdKafka::Producer::create(this->conf, this->error_string_);
 }
 
-Kafka::~Kafka()
+KafkaProducer::~KafkaProducer()
 {
-	delete conf;
-	delete producer;
+	delete this->conf;
+	delete this->producer;
 }
 
-std::string Kafka::send(std::string topic, std::string message)
+std::string KafkaProducer::send(std::string topic, std::string message)
 {
 	RdKafka::ErrorCode response = producer->produce(topic, RdKafka::Topic::PARTITION_UA,
 		RdKafka::Producer::RK_MSG_COPY, (void*)(message.c_str()), message.length() + 1, NULL, 0, 0, NULL);
@@ -26,17 +26,12 @@ std::string Kafka::send(std::string topic, std::string message)
 	return errs;
 }
 
-std::string Kafka::read(std::string topik)
-{
-	return std::string();
-}
-
-std::string Kafka::error()
+std::string KafkaProducer::error()
 {
 	return this->error_string_;
 }
 
-bool Kafka::connect()
+bool KafkaProducer::connect()
 {
 	return producer ? true : false;
 }

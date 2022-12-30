@@ -1,16 +1,15 @@
-#ifndef REDISEXT_H
-#define REDISEXT_H
+#ifndef KAFKAEXT_H
+#define KAFKAEXT_H
 
 #include <iostream>
 #include <librdkafka/rdkafkacpp.h>
 
-class Kafka
+class KafkaProducer
 {
 public:
-	Kafka(std::string broker);
-	~Kafka();
+	KafkaProducer(std::string broker);
+	~KafkaProducer();
 	std::string send(std::string topic, std::string message);
-	std::string read(std::string topic);
 	std::string error();
 	bool connect();
 

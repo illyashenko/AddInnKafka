@@ -11,6 +11,7 @@
 #include <vector>
 #include <codecvt>
 #include "OneCExtension.h"
+#include <csignal>
 
 ///////////////////////////////////////////////////////////////////////////////
 // class CAddInNative
@@ -22,6 +23,7 @@ public:
 		ePropHost = 0,
 		ePropTopic,
 		ePropMessage,
+		ePropError,
 		ePropLast      // Always last
 	};
 
@@ -29,6 +31,8 @@ public:
 	{
 		eMethSend = 0,
 		eMethRead,
+		eMethConsumerInit,
+		eMethConsumerClose,
 		eMethLast      // Always last
 	};
 
@@ -74,6 +78,8 @@ private:
 	std::wstring m_uHost;
 	std::wstring m_uTopic;
 	std::wstring m_uMessage;
+	std::wstring m_uError;
+	RdKafka::KafkaConsumer* _consumer;
 
 	HANDLE  m_hTimer;
 	HANDLE  m_hTimerQueue;

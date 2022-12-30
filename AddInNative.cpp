@@ -5,17 +5,17 @@
 #define BASE_ERRNO 7
 
 static const wchar_t* g_PropNames[] = {
-	L"Host", L"Topic", L"Message"
+	L"Host", L"Topic", L"Message", L"Error"
 };
 static const wchar_t* g_MethodNames[] = {
-	L"Send", L"Read"
+	L"Send", L"Read", L"ConsumerInit", L"ConsumerClose"
 };
 
 static const wchar_t* g_PropNamesRu[] = {
-	L"Host", L"Topic", L"Message"
+	L"Host", L"Topic", L"Message", L"Error"
 };
 static const wchar_t* g_MethodNamesRu[] = {
-	L"Send", L"Read"
+	L"Send", L"Read", L"ConsumerInit", L"ConsumerClose"
 };
 
 static const wchar_t g_kClassNames[] = L"AddInNativeExt";
@@ -66,6 +66,7 @@ CAddInNative::CAddInNative()
 	m_iMemory = 0;
 	m_iConnect = 0;
 	m_hTimerQueue = 0;
+	_consumer = nullptr;
 }
 //---------------------------------------------------------------------------//
 CAddInNative::~CAddInNative()
@@ -178,6 +179,9 @@ bool CAddInNative::GetPropVal(const long lPropNum, tVariant* pvarPropVal)
 	case ePropMessage:
 		wstring_to_variant(m_uMessage, pvarPropVal);
 		break;
+	case ePropError:
+		wstring_to_variant(m_uError, pvarPropVal);
+		break;
 	default:
 		return false;
 	}
@@ -203,6 +207,11 @@ bool CAddInNative::SetPropVal(const long lPropNum, tVariant* varPropVal)
 			return false;
 		m_uMessage = TV_WSTR(varPropVal);
 		break;
+	case ePropError:
+		if (TV_VT(varPropVal) != VTYPE_PWSTR)
+			return false;
+		m_uError = TV_WSTR(varPropVal);
+		break;
 	default:
 		return false;
 	}
@@ -223,6 +232,8 @@ bool CAddInNative::IsPropWritable(const long lPropNum)
 	case ePropTopic:
 		return true;
 	case ePropMessage:
+		return true;
+	case ePropError:
 		return true;
 	default:
 		return true;
@@ -291,6 +302,10 @@ long CAddInNative::GetNParams(const long lMethodNum)
 		return 0;
 	case eMethRead:
 		return 0;
+	case eMethConsumerInit:
+		return 0;
+	case eMethConsumerClose:
+		return 0;
 	default:
 		return 0;
 	}
@@ -304,9 +319,12 @@ bool CAddInNative::GetParamDefValue(const long lMethodNum, const long lParamNum,
 	switch (lMethodNum)
 	{
 	case eMethSend:
-		// There are no parameter values by default 
 		break;
 	case eMethRead:
+		break;
+	case eMethConsumerInit:
+		break;
+	case eMethConsumerClose:
 		break;
 	default:
 		return false;
@@ -331,6 +349,53 @@ bool CAddInNative::CallAsProc(const long lMethodNum, tVariant* paParams, const l
 {
 	switch (lMethodNum)
 	{
+	case eMethConsumerInit: {
+
+		std::string errstr;
+		const std::locale loc("Russian_Russia.1251");
+		auto host_ = narrow_string(m_uHost, loc);
+		auto topic_ = narrow_string(m_uTopic, loc);
+
+		std::vector<std::string> topics;
+		topics.push_back(topic_);
+
+		RdKafka::Conf* conf = RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL);
+
+		conf->set("bootstrap.servers", host_, errstr);
+		conf->set("group.id", "group_1", errstr);
+		conf->set("enable.partition.eof", "true", errstr);
+
+		this->_consumer = RdKafka::KafkaConsumer::create(conf, errstr);
+
+		if (!this->_consumer) {
+			std::wstring werrstr(errstr.begin(), errstr.end());
+			m_uError = L"Failed to create consumer: " + werrstr;
+			return false;
+		}
+
+		delete conf;
+
+		RdKafka::ErrorCode err = this->_consumer->subscribe(topics);
+
+		if (err)
+		{
+			auto errdkafka = RdKafka::err2str(err);
+			std::wstring werr(errdkafka.begin(), errdkafka.end());
+			m_uError = L"Failed to subscribe to topics: " + werr;
+			return false;
+		}
+
+		return true;
+	}
+	case eMethConsumerClose: {
+		
+		if (this->_consumer && !this->_consumer->closed())
+		{
+			this->_consumer->close();
+		}
+		return true;
+	
+	}
 	default:
 		return false;
 	}
@@ -341,15 +406,14 @@ bool CAddInNative::CallAsFunc(const long lMethodNum, tVariant* pvarRetValue, tVa
 	switch (lMethodNum)
 	{
 	case eMethSend: {
+
 		const std::locale loc("Russian_Russia.1251");
 		auto host_ = narrow_string(m_uHost, loc);
 
-
-		Kafka prod(host_);
+		KafkaProducer prod(host_);
 
 		if (!prod.connect())
 		{
-
 			return string_to_retVariant(prod.error(), pvarRetValue) ? true : false;
 		}
 
@@ -358,6 +422,22 @@ bool CAddInNative::CallAsFunc(const long lMethodNum, tVariant* pvarRetValue, tVa
 		auto ansewer = prod.send(topic_, message_);
 		
 		return string_to_retVariant(ansewer, pvarRetValue) ? true : false;
+	}
+	case eMethRead: {
+		
+		RdKafka::Message* msg = this->_consumer->consume(1000);
+
+		std::string ansewer{};
+
+		if (msg->err() == RdKafka::ERR_NO_ERROR) {
+
+			ansewer = static_cast<const char*>(msg->payload());
+
+			delete msg;
+		}
+
+		return string_to_retVariant(ansewer, pvarRetValue) ? true : false;
+		
 	}
 	default:
 		return false;
