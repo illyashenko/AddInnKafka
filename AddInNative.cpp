@@ -1,21 +1,42 @@
 #include "AddInNative.h"
 
 #define TIME_LEN 65
-
 #define BASE_ERRNO 7
 
+static const std::locale LOCALE_RUS{ "Russian_Russia.1251" };
+
 static const wchar_t* g_PropNames[] = {
-	L"Host", L"Topic", L"Message", L"Error"
+	L"Host", 
+	L"Topic", 
+	L"Message", 
+	L"Error", 
+	L"GroupId", 
+	L"AutoCommit"
 };
 static const wchar_t* g_MethodNames[] = {
-	L"Send", L"Read", L"ConsumerInit", L"ConsumerClose"
+	L"Send", 
+	L"Read", 
+	L"ConsumerInit", 
+	L"ConsumerClose", 
+	L"Commit", 
+	L"ProducerInit"
 };
 
 static const wchar_t* g_PropNamesRu[] = {
-	L"Host", L"Topic", L"Message", L"Error"
+	L"Хост", 
+	L"Топик", 
+	L"Сообщение", 
+	L"Ошибка", 
+	L"ИдентификаторГруппы", 
+	L"АвтоФиксация"
 };
 static const wchar_t* g_MethodNamesRu[] = {
-	L"Send", L"Read", L"ConsumerInit", L"ConsumerClose"
+	L"Отправить", 
+	L"Читать", 
+	L"ПотребительСоздать", 
+	L"ПотребительЗакрыть", 
+	L"Зафиксировать",
+	L"ПоставщикСоздать"
 };
 
 static const wchar_t g_kClassNames[] = L"AddInNativeExt";
@@ -66,7 +87,7 @@ CAddInNative::CAddInNative()
 	m_iMemory = 0;
 	m_iConnect = 0;
 	m_hTimerQueue = 0;
-	_consumer = nullptr;
+	m_uAutoCommit = true;
 }
 //---------------------------------------------------------------------------//
 CAddInNative::~CAddInNative()
@@ -182,6 +203,13 @@ bool CAddInNative::GetPropVal(const long lPropNum, tVariant* pvarPropVal)
 	case ePropError:
 		wstring_to_variant(m_uError, pvarPropVal);
 		break;
+	case ePropGroupId:
+		wstring_to_variant(m_uGroup_ig, pvarPropVal);
+		break;
+	case ePropAutoCommit:
+		TV_VT(pvarPropVal) = VTYPE_BOOL;
+		TV_BOOL(pvarPropVal) = m_uAutoCommit;
+		break;
 	default:
 		return false;
 	}
@@ -212,6 +240,16 @@ bool CAddInNative::SetPropVal(const long lPropNum, tVariant* varPropVal)
 			return false;
 		m_uError = TV_WSTR(varPropVal);
 		break;
+	case ePropGroupId:
+		if (TV_VT(varPropVal) != VTYPE_PWSTR)
+			return false;
+		m_uGroup_ig = TV_WSTR(varPropVal);
+		break;
+	case ePropAutoCommit:
+		if (TV_VT(varPropVal) != VTYPE_BOOL)
+			return false;
+		m_uAutoCommit = TV_BOOL(varPropVal);
+		break;
 	default:
 		return false;
 	}
@@ -234,6 +272,10 @@ bool CAddInNative::IsPropWritable(const long lPropNum)
 	case ePropMessage:
 		return true;
 	case ePropError:
+		return true;
+	case ePropGroupId:
+		return true;
+	case ePropAutoCommit:
 		return true;
 	default:
 		return true;
@@ -306,6 +348,10 @@ long CAddInNative::GetNParams(const long lMethodNum)
 		return 0;
 	case eMethConsumerClose:
 		return 0;
+	case eMethCommit:
+		return 0;
+	case eMethProducerInit:
+		return 0;
 	default:
 		return 0;
 	}
@@ -325,6 +371,10 @@ bool CAddInNative::GetParamDefValue(const long lMethodNum, const long lParamNum,
 	case eMethConsumerInit:
 		break;
 	case eMethConsumerClose:
+		break;
+	case eMethCommit:
+		break;
+	case eMethProducerInit:
 		break;
 	default:
 		return false;
@@ -350,52 +400,30 @@ bool CAddInNative::CallAsProc(const long lMethodNum, tVariant* paParams, const l
 	switch (lMethodNum)
 	{
 	case eMethConsumerInit: {
-
-		std::string errstr;
-		const std::locale loc("Russian_Russia.1251");
-		auto host_ = narrow_string(m_uHost, loc);
-		auto topic_ = narrow_string(m_uTopic, loc);
-
-		std::vector<std::string> topics;
-		topics.push_back(topic_);
-
-		RdKafka::Conf* conf = RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL);
-
-		conf->set("bootstrap.servers", host_, errstr);
-		conf->set("group.id", "group_1", errstr);
-		conf->set("enable.partition.eof", "true", errstr);
-
-		this->_consumer = RdKafka::KafkaConsumer::create(conf, errstr);
-
-		if (!this->_consumer) {
-			std::wstring werrstr(errstr.begin(), errstr.end());
-			m_uError = L"Failed to create consumer: " + werrstr;
-			return false;
-		}
-
-		delete conf;
-
-		RdKafka::ErrorCode err = this->_consumer->subscribe(topics);
-
-		if (err)
-		{
-			auto errdkafka = RdKafka::err2str(err);
-			std::wstring werr(errdkafka.begin(), errdkafka.end());
-			m_uError = L"Failed to subscribe to topics: " + werr;
-			return false;
-		}
-
-		return true;
+		return consumerInit();
 	}
 	case eMethConsumerClose: {
-		
+
 		if (this->_consumer && !this->_consumer->closed())
 		{
 			this->_consumer->close();
 		}
+
 		return true;
-	
 	}
+	case eMethCommit: {
+
+		if (_consumer)
+		{
+			_consumer->commitSync(current_message.get());
+		}
+
+		return true;
+	}
+	case eMethProducerInit: {
+		return producerInit();
+	}
+
 	default:
 		return false;
 	}
@@ -407,37 +435,45 @@ bool CAddInNative::CallAsFunc(const long lMethodNum, tVariant* pvarRetValue, tVa
 	{
 	case eMethSend: {
 
-		const std::locale loc("Russian_Russia.1251");
-		auto host_ = narrow_string(m_uHost, loc);
+		auto message_ = narrow_string(m_uMessage, LOCALE_RUS);
+		auto topic_ = narrow_string(m_uTopic, LOCALE_RUS);
 
-		KafkaProducer prod(host_);
+		RdKafka::ErrorCode response = _producer->produce(topic_, RdKafka::Topic::PARTITION_UA,
+			RdKafka::Producer::RK_MSG_COPY, (void*)(message_.c_str()), message_.length() + 1, NULL, 0, 0, NULL);
 
-		if (!prod.connect())
+		std::string ansewer{ RdKafka::err2str(response) };
+
+		_producer->poll(0);
+		auto err = _producer->flush(10000);
+
+		if (err)
 		{
-			return string_to_retVariant(prod.error(), pvarRetValue) ? true : false;
+			ansewer = RdKafka::err2str(err);
 		}
-
-		auto message_ = narrow_string(m_uMessage, loc);
-		auto topic_ = narrow_string(m_uTopic, loc);
-		auto ansewer = prod.send(topic_, message_);
 		
 		return string_to_retVariant(ansewer, pvarRetValue) ? true : false;
 	}
 	case eMethRead: {
 		
-		RdKafka::Message* msg = this->_consumer->consume(1000);
+		std::shared_ptr<RdKafka::Message> msg(this->_consumer->consume(1000));
 
 		std::string ansewer{};
 
 		if (msg->err() == RdKafka::ERR_NO_ERROR) {
 
-			ansewer = static_cast<const char*>(msg->payload());
-
-			delete msg;
+			std::ostringstream s_ansewer;
+			
+			s_ansewer <<'{' << ' ';
+			s_ansewer << '"' << "topic" << '"' << ':';
+			s_ansewer << '"' <<  msg->topic_name() << '"' << ',' << ' ';
+			s_ansewer << '"' << "data" << '"' << ':' << static_cast<const char*>(msg->payload());
+			s_ansewer << ' ' << '}';
+			
+			ansewer = s_ansewer.str();
+			current_message = msg;
 		}
 
-		return string_to_retVariant(ansewer, pvarRetValue) ? true : false;
-		
+		return string_to_retVariant(ansewer, pvarRetValue) ? true : false;	
 	}
 	default:
 		return false;
@@ -664,4 +700,92 @@ std::string CAddInNative::narrow_string(std::wstring const& s, std::locale const
 	facet.narrow(first, last, default_char, &result[0]);
 
 	return std::string(result.begin(), result.end());
+}
+
+bool CAddInNative::consumerInit()
+{
+	std::string errstr;
+
+	auto host_ = narrow_string(m_uHost, LOCALE_RUS);
+	auto topic_ = narrow_string(m_uTopic, LOCALE_RUS);
+	auto group_id = narrow_string(m_uGroup_ig, LOCALE_RUS);
+
+	if (host_.empty() || topic_.empty())
+	{
+		m_uError = L"Failed: HOST or TOPIC is empty";
+		return false;
+	}
+
+	std::regex rdelim{ ";" };
+	auto topics = split(topic_, rdelim);
+
+	if (topics.empty())
+	{
+		m_uError = L"Error: split TOPIC's";
+		return false;
+	}
+
+	std::unique_ptr<RdKafka::Conf> conf(RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL));
+
+	conf->set("bootstrap.servers", host_, errstr);
+	conf->set("group.id", group_id.c_str(), errstr);
+
+	if (!m_uAutoCommit)
+	{
+		conf->set("enable.auto.commit", "false", errstr);
+	}
+
+	std::shared_ptr<RdKafka::KafkaConsumer> consumer(RdKafka::KafkaConsumer::create(conf.get(), errstr));
+
+	this->_consumer = consumer;
+
+	if (!this->_consumer) {
+		std::wstring werrstr(errstr.begin(), errstr.end());
+		m_uError = L"Failed to create consumer: " + werrstr;
+		return false;
+	}
+
+	RdKafka::ErrorCode err = this->_consumer->subscribe(topics);
+
+	if (err)
+	{
+		auto errdkafka = RdKafka::err2str(err);
+		std::wstring werr(errdkafka.begin(), errdkafka.end());
+		m_uError = L"Failed to subscribe to topics: " + werr;
+		return false;
+	}
+
+	return true;
+}
+
+bool CAddInNative::producerInit()
+{
+	std::string errstr;
+	auto host_ = narrow_string(m_uHost, LOCALE_RUS);
+
+	std::unique_ptr<RdKafka::Conf> conf(RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL));
+
+	conf->set("metadata.broker.list", host_.c_str(), errstr);
+
+	std::shared_ptr<RdKafka::Producer> producer(RdKafka::Producer::create(conf.get(), errstr));
+	this->_producer = producer;
+
+	if (!this->_producer)
+	{
+		std::wstring werrstr(errstr.begin(), errstr.end());
+		m_uError = L"Failed to create Producer: " + werrstr;
+		return false;
+	}
+
+	return true;
+}
+
+std::vector<std::string> CAddInNative::split(std::string& str_value, const std::regex& rdelim)
+{
+	std::vector<std::string> topics{
+		   std::sregex_token_iterator(str_value.begin(), str_value.end(), rdelim, -1),
+		   std::sregex_token_iterator()
+	};
+
+	return topics;
 }

@@ -10,8 +10,12 @@
 #include <string>
 #include <vector>
 #include <codecvt>
-#include "OneCExtension.h"
 #include <csignal>
+#include <ostream>
+#include <iostream>
+#include <sstream>
+#include <regex>
+#include <librdkafka/rdkafkacpp.h>
 
 ///////////////////////////////////////////////////////////////////////////////
 // class CAddInNative
@@ -24,6 +28,8 @@ public:
 		ePropTopic,
 		ePropMessage,
 		ePropError,
+		ePropGroupId,
+		ePropAutoCommit,
 		ePropLast      // Always last
 	};
 
@@ -33,6 +39,8 @@ public:
 		eMethRead,
 		eMethConsumerInit,
 		eMethConsumerClose,
+		eMethCommit,
+		eMethProducerInit,
 		eMethLast      // Always last
 	};
 
@@ -71,6 +79,9 @@ private:
 	bool string_to_retVariant(std::string& str, tVariant* retValue);
 	void addError(uint32_t wcode, const wchar_t* source, const wchar_t* descriptor, long code);
 	std::string narrow_string(std::wstring const& s, std::locale const& loc, char default_char = '?');
+	bool consumerInit();
+	bool producerInit();
+	std::vector<std::string> split(std::string& str_value, const std::regex& rdelim);
 	// Attributes
 	IAddInDefBase* m_iConnect;
 	IMemoryManager* m_iMemory;
@@ -79,7 +90,12 @@ private:
 	std::wstring m_uTopic;
 	std::wstring m_uMessage;
 	std::wstring m_uError;
-	RdKafka::KafkaConsumer* _consumer;
+	std::wstring m_uGroup_ig;
+	bool m_uAutoCommit;
+
+	std::shared_ptr<RdKafka::Producer> _producer;
+	std::shared_ptr<RdKafka::KafkaConsumer> _consumer;
+	std::shared_ptr<RdKafka::Message> current_message;
 
 	HANDLE  m_hTimer;
 	HANDLE  m_hTimerQueue;
