@@ -41,6 +41,7 @@ public:
 		eMethConsumerClose,
 		eMethCommit,
 		eMethProducerInit,
+		eMethTopicCreate,
 		eMethLast      // Always last
 	};
 
@@ -81,6 +82,7 @@ private:
 	std::string narrow_string(std::wstring const& s, std::locale const& loc, char default_char = '?');
 	bool consumerInit();
 	bool producerInit();
+	bool topicCreate();
 	std::vector<std::string> split(std::string& str_value, const std::regex& rdelim);
 	// Attributes
 	IAddInDefBase* m_iConnect;

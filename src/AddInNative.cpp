@@ -19,7 +19,8 @@ static const wchar_t* g_MethodNames[] = {
 	L"ConsumerInit", 
 	L"ConsumerClose", 
 	L"Commit", 
-	L"ProducerInit"
+	L"ProducerInit",
+	L"TopicCreate"
 };
 
 static const wchar_t* g_PropNamesRu[] = {
@@ -36,7 +37,8 @@ static const wchar_t* g_MethodNamesRu[] = {
 	L"ПотребительСоздать", 
 	L"ПотребительЗакрыть", 
 	L"Зафиксировать",
-	L"ПоставщикСоздать"
+	L"ПоставщикСоздать",
+	L"ТопикСоздать"
 };
 
 static const wchar_t g_kClassNames[] = L"AddInNativeExt";
@@ -352,6 +354,8 @@ long CAddInNative::GetNParams(const long lMethodNum)
 		return 0;
 	case eMethProducerInit:
 		return 0;
+	case eMethTopicCreate:
+		return 0;
 	default:
 		return 0;
 	}
@@ -375,6 +379,8 @@ bool CAddInNative::GetParamDefValue(const long lMethodNum, const long lParamNum,
 	case eMethCommit:
 		break;
 	case eMethProducerInit:
+		break;
+	case eMethTopicCreate:
 		break;
 	default:
 		return false;
@@ -422,6 +428,9 @@ bool CAddInNative::CallAsProc(const long lMethodNum, tVariant* paParams, const l
 	}
 	case eMethProducerInit: {
 		return producerInit();
+	}
+	case eMethTopicCreate: {
+		return topicCreate();
 	}
 
 	default:
@@ -728,6 +737,7 @@ bool CAddInNative::consumerInit()
 	std::unique_ptr<RdKafka::Conf> conf(RdKafka::Conf::create(RdKafka::Conf::CONF_GLOBAL));
 
 	conf->set("bootstrap.servers", host_, errstr);
+	conf->set("auto.offset.reset", "earliest", errstr);
 	conf->set("group.id", group_id.c_str(), errstr);
 
 	if (!m_uAutoCommit)
@@ -774,6 +784,30 @@ bool CAddInNative::producerInit()
 	{
 		std::wstring werrstr(errstr.begin(), errstr.end());
 		m_uError = L"Failed to create Producer: " + werrstr;
+		return false;
+	}
+
+	return true;
+}
+
+bool CAddInNative::topicCreate()
+{
+	auto topic_name = narrow_string(m_uTopic, LOCALE_RUS);
+	std::string errstr{};
+
+	if (!this->_producer)
+	{
+		m_uError = L"Failed to create Producer";
+		return false;
+	}
+
+	std::unique_ptr<RdKafka::Conf> tconf(RdKafka::Conf::create(RdKafka::Conf::CONF_TOPIC));
+	std::unique_ptr<RdKafka::Topic> topic(RdKafka::Topic::create(this->_producer.get(), topic_name, tconf.get(), errstr));
+
+	if (!topic)
+	{
+		std::wstring werrstr(errstr.begin(), errstr.end());
+		m_uError = L"Failed to create Topic:" + m_uTopic + werrstr;
 		return false;
 	}
 
